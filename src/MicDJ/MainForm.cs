@@ -4,21 +4,20 @@ using NAudio.CoreAudioApi;
 
 namespace MicDJ;
 
-internal sealed class MainForm : Form
+internal sealed partial class MainForm : Form
 {
     private readonly ComboBox microphone = NewCombo();
     private readonly ComboBox destination = NewCombo();
     private readonly ComboBox virtualInput = NewCombo();
     private readonly ComboBox headphones = NewCombo();
-    private readonly CheckBox micToggle = new() { Text = "Microphone enabled", Checked = true, AutoSize = true };
-    private readonly CheckBox monitorToggle = new() { Text = "Monitor mix", AutoSize = true };
-    private readonly ListBox sounds = new() { Dock = DockStyle.Fill, BorderStyle = BorderStyle.None, IntegralHeight = false };
+    private readonly CheckBox micToggle = new StudioToggle { Text = "Microphone enabled", Checked = true };
+    private readonly CheckBox monitorToggle = new StudioToggle { Text = "Monitor mix" };
+    private readonly ListBox sounds = new StudioLibrary();
     private readonly Button start = NewButton("▶  Start", true);
     private readonly Button stop = NewButton("■  Stop");
     private readonly Button play = NewButton("▶  Play");
     private readonly Button refresh = NewButton("Refresh devices");
     private readonly Label status = new() { Text = "Ready", AutoSize = true, ForeColor = Color.FromArgb(35, 110, 90), Padding = new Padding(0, 8, 0, 0) };
-    private readonly Label mode = new() { AutoSize = true, MaximumSize = new Size(690, 0), ForeColor = Color.DimGray };
     private readonly string dataDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "MicDJ");
     private readonly DefaultInputSession defaults;
     private AudioEngine? engine;
@@ -27,54 +26,16 @@ internal sealed class MainForm : Form
     public MainForm()
     {
         Text = "MicDJ";
-        Font = new Font("Segoe UI", 10);
-        BackColor = Color.FromArgb(245, 247, 250);
+        Font = new Font("Bahnschrift", 10);
+        BackColor = StudioTheme.Background;
+        ForeColor = StudioTheme.Text;
         ClientSize = new Size(760, 840);
         MinimumSize = new Size(710, 820);
         StartPosition = FormStartPosition.CenterScreen;
         AutoScaleMode = AutoScaleMode.Dpi;
         defaults = new DefaultInputSession(new WindowsDefaultInputs(), Path.Combine(dataDirectory, "input-session.json"));
 
-        var root = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(28), ColumnCount = 1, RowCount = 9 };
-        root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 50));
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 200));
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 52));
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 40));
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
-        root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 52));
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
-        root.Controls.Add(new Label { Text = "MicDJ", Font = new Font("Segoe UI", 26, FontStyle.Bold), AutoSize = true }, 0, 0);
-        var deviceGrid = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 4 };
-        deviceGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 180));
-        deviceGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        AddDeviceRow(deviceGrid, 0, "Physical microphone", microphone);
-        AddDeviceRow(deviceGrid, 1, "Mix output", destination);
-        AddDeviceRow(deviceGrid, 2, "Virtual input", virtualInput);
-        AddDeviceRow(deviceGrid, 3, "Headphones / monitor", headphones);
-        root.Controls.Add(deviceGrid, 0, 1);
-        root.Controls.Add(mode, 0, 2);
-        var toggles = new FlowLayoutPanel { Dock = DockStyle.Fill };
-        micToggle.Margin = new Padding(0, 5, 30, 0);
-        monitorToggle.Margin = new Padding(0, 5, 0, 0);
-        toggles.Controls.AddRange([micToggle, monitorToggle]);
-        root.Controls.Add(toggles, 0, 3);
-        root.Controls.Add(new Label { Text = "SOUND LIBRARY · WAV", AutoSize = true, ForeColor = Color.DimGray }, 0, 4);
-        sounds.BackColor = Color.White;
-        sounds.ItemHeight = 28;
-        root.Controls.Add(sounds, 0, 5);
-        var libraryActions = new FlowLayoutPanel { Dock = DockStyle.Fill };
-        var add = NewButton("+  Add WAV");
-        var remove = NewButton("Remove from list");
-        libraryActions.Controls.AddRange([add, play, remove]);
-        root.Controls.Add(libraryActions, 0, 6);
-        var transport = new FlowLayoutPanel { Dock = DockStyle.Fill };
-        transport.Controls.AddRange([start, stop, refresh]);
-        root.Controls.Add(transport, 0, 7);
-        root.Controls.Add(status, 0, 8);
-        Controls.Add(root);
+        var (add, remove) = BuildStudioLayout();
         start.Click += (_, _) => StartMix();
         stop.Click += (_, _) => StopMix();
         refresh.Click += (_, _) => Guard(RefreshDevices);
@@ -100,20 +61,8 @@ internal sealed class MainForm : Form
         UpdateState();
     }
 
-    private static ComboBox NewCombo() => new() { DropDownStyle = ComboBoxStyle.DropDownList, Dock = DockStyle.Fill, DropDownWidth = 600 };
-    private static Button NewButton(string text, bool accent = false) => new()
-    {
-        Text = text, AutoSize = true, Height = 36, MinimumSize = new Size(115, 36), FlatStyle = FlatStyle.Flat,
-        BackColor = accent ? Color.FromArgb(40, 95, 225) : Color.White,
-        ForeColor = accent ? Color.White : Color.FromArgb(30, 40, 55), Margin = new Padding(0, 5, 10, 0), Cursor = Cursors.Hand
-    };
-    private static void AddDeviceRow(TableLayoutPanel panel, int row, string label, Control control)
-    {
-        panel.RowStyles.Add(new RowStyle(SizeType.Percent, 25));
-        panel.Controls.Add(new Label { Text = label, AutoSize = true, Padding = new Padding(0, 6, 0, 0) }, 0, row);
-        control.Margin = new Padding(0, 3, 0, 10);
-        panel.Controls.Add(control, 1, row);
-    }
+    private static ComboBox NewCombo() => new StudioCombo();
+    private static Button NewButton(string text, bool accent = false) => new StudioButton { Text = text, Accent = accent };
     private void RefreshDevices()
     {
         var inputs = AudioEngine.ListDevices(DataFlow.Capture);
@@ -140,9 +89,7 @@ internal sealed class MainForm : Form
     private void UpdateMode()
     {
         virtualInput.Enabled = engine == null && !PreviewOnly;
-        mode.Text = PreviewOnly
-            ? "Test mode: enable Monitor mix to hear the mix. Windows input settings stay unchanged."
-            : "Select a cable pair, e.g. CABLE Input → CABLE Output. Start switches the Windows input; Stop restores it.";
+
     }
     private void UpdateState()
     {
@@ -198,7 +145,7 @@ internal sealed class MainForm : Form
     private string LibraryDirectory => Path.Combine(dataDirectory, "Sounds");
     private sealed record SoundItem(string Path, bool BuiltIn = false)
     {
-        public override string ToString() => BuiltIn ? "♫  Welcome · sample sound" : System.IO.Path.GetFileNameWithoutExtension(Path);
+        public override string ToString() => BuiltIn ? "Welcome · sample sound" : System.IO.Path.GetFileNameWithoutExtension(Path);
     }
     private void LoadLibrary()
     {

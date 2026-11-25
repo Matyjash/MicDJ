@@ -6,9 +6,12 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Assets/MicDJ.ico</ApplicationIcon>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="NAudio" Version="2.2.1" />
     <Content Include="Assets/chime.wav" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="Assets/brand.png" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="Assets/MicDJ.ico" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>
