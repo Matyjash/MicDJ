@@ -1,5 +1,7 @@
 # MicDJ
 
+<img src="src/MicDJ/Assets/brand.png" alt="MicDJ logo" width="20%">
+
 A mixer for Windows 10/11: combine your microphone and a selected WAV file into one input.
 
 > [!IMPORTANT]
