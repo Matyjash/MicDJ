@@ -177,7 +177,9 @@ internal sealed class StudioLibrary : ListBox
         if (e.Index < 0) return;
         // Native ListBox painting does not use Control.OptimizedDoubleBuffer.
         using var buffer = BufferedGraphicsManager.Current.Allocate(e.Graphics, e.Bounds);
-        DrawSound(new DrawItemEventArgs(buffer.Graphics, e.Font, e.Bounds, e.Index, e.State, e.ForeColor, e.BackColor));
+        buffer.Graphics.ResetTransform();
+        var localBounds = new Rectangle(Point.Empty, e.Bounds.Size);
+        DrawSound(new DrawItemEventArgs(buffer.Graphics, e.Font, localBounds, e.Index, e.State, e.ForeColor, e.BackColor));
         buffer.Render(e.Graphics);
     }
 

@@ -17,6 +17,35 @@ string directory = Path.Combine(Path.GetTempPath(), "MicDJ-checks-" + Guid.NewGu
 Directory.CreateDirectory(directory);
 try
 {
+    Check("Buffered library rows render names and shortcuts below the first row", () =>
+    {
+        using var library = new StudioLibrary { Size = new Size(480, 200) };
+        library.Items.Add("First sound");
+        library.Items.Add("Second sound.wav");
+        library.ShortcutText = _ => "Ctrl + 2";
+        var draw = typeof(StudioLibrary).GetMethod("OnDrawItem", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+        foreach (bool playing in new[] { false, true })
+        {
+            library.UpdatePlayback(playing ? library.Items[1] : null);
+            using var bitmap = new Bitmap(480, 200);
+            using var graphics = Graphics.FromImage(bitmap);
+            graphics.Clear(Color.Black);
+            draw.Invoke(library, [new DrawItemEventArgs(graphics, library.Font, new Rectangle(0, 52, 480, 52), 1,
+                DrawItemState.Selected, library.ForeColor, library.BackColor)]);
+            bool HasText(int left, int right)
+            {
+                for (int y = 55; y < 101; y++)
+                    for (int x = left; x < right; x++)
+                    {
+                        Color pixel = bitmap.GetPixel(x, y);
+                        if (pixel.R > 120 && pixel.G > 120 && pixel.B > 120) return true;
+                    }
+                return false;
+            }
+            Assert(HasText(50, 250), "Second row sound name is missing");
+            Assert(HasText(350, 470), "Second row shortcut is missing");
+        }
+    });
     Check("Windows hotkeys detect conflicts, dispatch messages and release registrations", () =>
     {
         var mappings = new KeyMappings();
