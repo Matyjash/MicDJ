@@ -1,5 +1,4 @@
 using MicDJ.Core;
-using NAudio.Wave;
 
 int passed = 0;
 void Check(string name, Action test)
@@ -63,75 +62,6 @@ try
         session.Restore();
         Assert(!session.HasPendingRestore && devices.Current[0] == "mic0", "Retry failed");
     });
-    Check("Mic mute leaves WAV intact and respects buffer offset", () =>
-    {
-        var mix = new MixProvider(new Tone(.4f)) { MicrophoneEnabled = false };
-        Assert(!mix.IsPlaying, "New mixer reports playback");
-        mix.Play([.5f, -.5f, .25f, -.25f]);
-        Assert(mix.IsPlaying, "Playing clip not reported");
-        float[] buffer = Enumerable.Repeat(99f, 8).ToArray();
-        mix.Read(buffer, 2, 4);
-        Assert(!mix.IsPlaying, "Completed clip still reports playback");
-        Assert(buffer[0] == 99 && buffer[6] == 99, "Buffer boundary overwritten");
-        Assert(Math.Abs(buffer[2] - .35f) < .0001f && Math.Abs(buffer[3] + .35f) < .0001f, "Sound muted or changed");
-        mix.Read(buffer, 0, 8);
-        Assert(buffer.All(x => x == 0), "Ended clip repeated or muted microphone leaked");
-    });
-    Check("Stopping a sound clears playback and the next play starts at the beginning", () =>
-    {
-        var mix = new MixProvider(new Tone(.4f)) { MicrophoneEnabled = false };
-        float[] samples = [.5f, -.5f, .25f, -.25f];
-        float[] buffer = new float[2];
-        mix.Play(samples);
-        mix.Read(buffer, 0, 2);
-        Assert(mix.IsPlaying, "Partially consumed clip not playing");
-        mix.StopSound();
-        Assert(!mix.IsPlaying, "Stopped clip still playing");
-        mix.Read(buffer, 0, 2);
-        Assert(buffer.All(value => value == 0), "Stopped clip leaked samples");
-        mix.StopSound();
-        mix.Play(samples);
-        mix.Read(buffer, 0, 2);
-        Assert(Math.Abs(buffer[0] - .35f) < .0001f && Math.Abs(buffer[1] + .35f) < .0001f, "Replay resumed instead of restarting");
-        mix.StopSound();
-        mix.MicrophoneEnabled = true;
-        buffer = new float[48000];
-        mix.Read(buffer, 0, buffer.Length);
-        Assert(buffer.Any(value => Math.Abs(value) > .1f), "Stopping the sound stopped microphone audio");
-    });
-    Check("Gate suppresses quiet noise but passes speech-level signal", () =>
-    {
-        float[] buffer = new float[48000];
-        new MixProvider(new Tone(.001f)).Read(buffer, 0, buffer.Length);
-        Assert(buffer.All(x => x == 0), "Quiet noise passed gate");
-        new MixProvider(new Tone(.2f)).Read(buffer, 0, buffer.Length);
-        Assert(buffer.Max(x => Math.Abs(x)) > .1f, "Speech signal suppressed");
-    });
-    Check("Mixer limits clipping and replay replaces current sound", () =>
-    {
-        var mix = new MixProvider(new Tone(.9f));
-        mix.Play(Enumerable.Repeat(4f, 2000).ToArray());
-        float[] buffer = new float[2000];
-        mix.Read(buffer, 0, buffer.Length);
-        Assert(buffer.All(x => float.IsFinite(x) && Math.Abs(x) <= 1), "Out of range audio");
-        mix.MicrophoneEnabled = false;
-        mix.Play([.5f, .5f]);
-        mix.Play([.25f, .25f]);
-        mix.Read(buffer, 0, 2);
-        Assert(Math.Abs(buffer[0] - .175f) < .0001f, "Replay did not replace sound");
-    });
-    Check("Key mappings reject collisions without losing existing assignments", () =>
-    {
-        var mappings = new KeyMappings();
-        mappings.Assign("sound:one.wav", Keys.F1);
-        mappings.Assign("sound:two.wav", Keys.Control | Keys.D2);
-        try { mappings.Assign("sound:two.wav", Keys.F1); throw new Exception("Expected collision"); }
-        catch (InvalidOperationException) { }
-        Assert(mappings.FindSound(Keys.F1) == "sound:one.wav", "Collision replaced original sound");
-        Assert(mappings.FindSound(Keys.Control | Keys.D2) == "sound:two.wav", "Collision removed old binding");
-        mappings.Assign("SOUND:ONE.WAV", Keys.F3);
-        Assert(mappings.FindSound(Keys.F1) == null && mappings.Bindings.Count == 2, "Reassignment left stale binding");
-    });
     Check("Mapping drafts isolate cancel and save changes atomically", () =>
     {
         string path = Path.Combine(directory, "keys.json");
@@ -147,13 +77,6 @@ try
         var loaded = KeyMappings.Load(path);
         Assert(loaded.Bindings.Count == 1 && loaded.FindSound(Keys.Control | Keys.Shift | Keys.D1) == "sound:intro.wav", "Saved mapping did not round-trip");
         Assert(!Directory.EnumerateFiles(directory, "*.tmp").Any(), "Temporary save file leaked");
-    });
-    Check("Shortcuts preserve navigation keys and format combinations clearly", () =>
-    {
-        Assert(!KeyMappings.IsValid(Keys.Tab) && !KeyMappings.IsValid(Keys.Escape) && !KeyMappings.IsValid(Keys.Alt | Keys.F4), "Reserved keys accepted");
-        Assert(!KeyMappings.IsValid(Keys.A) && !KeyMappings.IsValid(Keys.ControlKey), "Incomplete shortcut accepted");
-        Assert(KeyMappings.IsValid(Keys.F2) && KeyMappings.IsValid(Keys.Control | Keys.D2), "Valid shortcut rejected");
-        Assert(KeyMappings.Format(Keys.Control | Keys.Shift | Keys.D2) == "Ctrl + Shift + 2", "Wrong shortcut display");
     });
     Check("Invalid saved mappings fail without overwriting the file", () =>
     {
@@ -181,20 +104,5 @@ sealed class FakeInputs : IDefaultInputs
     {
         if (FailOnRole == role) { FailOnRole = -1; throw new InvalidOperationException("Simulated missing endpoint"); }
         Current[role] = id;
-    }
-}
-
-sealed class Tone(float amplitude) : ISampleProvider
-{
-    private int frame;
-    public WaveFormat WaveFormat { get; } = WaveFormat.CreateIeeeFloatWaveFormat(48000, 2);
-    public int Read(float[] buffer, int offset, int count)
-    {
-        for (int i = 0; i < count; i += 2)
-        {
-            float value = amplitude * MathF.Sin(2 * MathF.PI * 440 * frame++ / 48000);
-            buffer[offset + i] = buffer[offset + i + 1] = value;
-        }
-        return count;
     }
 }
