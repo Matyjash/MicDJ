@@ -53,6 +53,7 @@ internal sealed partial class MainForm : Form
         remove.Click += (_, _) => Guard(RemoveSound);
         play.Click += (_, _) => Guard(PlaySound);
         sounds.DoubleClick += (_, _) => Guard(PlaySound);
+        sounds.SelectedIndexChanged += (_, _) => UpdatePlayButton();
         micToggle.CheckedChanged += (_, _) => { if (engine != null) engine.MicrophoneEnabled = micToggle.Checked; };
         monitorToggle.CheckedChanged += (_, _) => { if (engine != null) engine.MonitorEnabled = monitorToggle.Checked; };
         destination.SelectedIndexChanged += (_, _) => UpdateMode();
@@ -121,7 +122,7 @@ internal sealed partial class MainForm : Form
         bool running = engine != null;
         start.Enabled = !running && !defaults.HasPendingRestore;
         stop.Enabled = running || defaults.HasPendingRestore;
-        play.Enabled = running;
+        UpdatePlayButton();
         microphone.Enabled = destination.Enabled = headphones.Enabled = refresh.Enabled = !running;
         UpdateMode();
     }
@@ -203,6 +204,11 @@ internal sealed partial class MainForm : Form
         if (sounds.SelectedItem is not SoundItem item) return;
         if (item.BuiltIn) throw new InvalidOperationException("The sample sound is a permanent part of the library.");
         File.Delete(item.Path);
+        if (playingSound == item)
+        {
+            engine?.StopSound();
+            UpdatePlayback();
+        }
         sounds.Items.Remove(item);
         keyMappings.Remove(item.Id);
         keyMappings.Save(KeyMappingsPath);
@@ -210,6 +216,12 @@ internal sealed partial class MainForm : Form
     private void PlaySound()
     {
         if (engine == null || sounds.SelectedItem is not SoundItem sound) return;
+        if (playingSound == sound && engine.IsPlaying)
+        {
+            engine.StopSound();
+            UpdatePlayback();
+            return;
+        }
         PlaySound(sound);
     }
 
@@ -232,6 +244,14 @@ internal sealed partial class MainForm : Form
         sounds.PlayingItem = playingSound;
         sounds.AnimationFrame = (sounds.AnimationFrame + 1) % 12;
         sounds.Invalidate();
+        UpdatePlayButton();
+    }
+
+    private void UpdatePlayButton()
+    {
+        play.Enabled = engine != null && sounds.SelectedItem is SoundItem;
+        play.Text = engine?.IsPlaying == true && sounds.SelectedItem is SoundItem selected && playingSound == selected
+            ? "■  Stop sound" : "▶  Play";
     }
 
     private void LoadKeyMappings()

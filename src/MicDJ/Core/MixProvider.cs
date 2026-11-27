@@ -25,6 +25,11 @@ public sealed class MixProvider : ISampleProvider
         lock (sync) { clip = samples; position = 0; }
     }
 
+    public void StopSound()
+    {
+        lock (sync) { clip = []; position = 0; }
+    }
+
     public int Read(float[] buffer, int offset, int count)
     {
         int read = microphone.Read(buffer, offset, count);

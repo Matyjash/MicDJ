@@ -77,6 +77,28 @@ try
         mix.Read(buffer, 0, 8);
         Assert(buffer.All(x => x == 0), "Ended clip repeated or muted microphone leaked");
     });
+    Check("Stopping a sound clears playback and the next play starts at the beginning", () =>
+    {
+        var mix = new MixProvider(new Tone(.4f)) { MicrophoneEnabled = false };
+        float[] samples = [.5f, -.5f, .25f, -.25f];
+        float[] buffer = new float[2];
+        mix.Play(samples);
+        mix.Read(buffer, 0, 2);
+        Assert(mix.IsPlaying, "Partially consumed clip not playing");
+        mix.StopSound();
+        Assert(!mix.IsPlaying, "Stopped clip still playing");
+        mix.Read(buffer, 0, 2);
+        Assert(buffer.All(value => value == 0), "Stopped clip leaked samples");
+        mix.StopSound();
+        mix.Play(samples);
+        mix.Read(buffer, 0, 2);
+        Assert(Math.Abs(buffer[0] - .35f) < .0001f && Math.Abs(buffer[1] + .35f) < .0001f, "Replay resumed instead of restarting");
+        mix.StopSound();
+        mix.MicrophoneEnabled = true;
+        buffer = new float[48000];
+        mix.Read(buffer, 0, buffer.Length);
+        Assert(buffer.Any(value => Math.Abs(value) > .1f), "Stopping the sound stopped microphone audio");
+    });
     Check("Gate suppresses quiet noise but passes speech-level signal", () =>
     {
         float[] buffer = new float[48000];
