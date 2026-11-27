@@ -12,7 +12,7 @@ internal sealed partial class MainForm : Form
     private readonly ComboBox headphones = NewCombo();
     private readonly CheckBox micToggle = new StudioToggle { Text = "Microphone enabled", Checked = true };
     private readonly CheckBox monitorToggle = new StudioToggle { Text = "Monitor mix" };
-    private readonly ListBox sounds = new StudioLibrary();
+    private readonly StudioLibrary sounds = new();
     private readonly Button start = NewButton("▶  Start", true);
     private readonly Button stop = NewButton("■  Stop");
     private readonly Button play = NewButton("▶  Play");
@@ -40,6 +40,8 @@ internal sealed partial class MainForm : Form
         defaults = new DefaultInputSession(new WindowsDefaultInputs(), Path.Combine(dataDirectory, "input-session.json"));
 
         var (add, remove) = BuildStudioLayout();
+        sounds.ShortcutText = item => item is SoundItem sound && keyMappings.Bindings.TryGetValue(sound.Id, out var shortcut)
+            ? KeyMappings.Format(shortcut) : null;
         start.Click += (_, _) => StartMix();
         stop.Click += (_, _) => StopMix();
         refresh.Click += (_, _) => Guard(RefreshDevices);
@@ -212,6 +214,7 @@ internal sealed partial class MainForm : Form
         var available = sounds.Items.Cast<SoundItem>().Select(item => item.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
         foreach (string id in loaded.Bindings.Keys.Where(id => !available.Contains(id)).ToArray()) loaded.Remove(id);
         keyMappings = loaded;
+        sounds.Invalidate();
     }
 
     private void OpenKeyMappings()

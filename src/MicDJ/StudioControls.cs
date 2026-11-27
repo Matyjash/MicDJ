@@ -131,6 +131,7 @@ internal sealed class StudioCombo : ComboBox
 
 internal sealed class StudioLibrary : ListBox
 {
+    internal Func<object, string?>? ShortcutText;
     public StudioLibrary()
     {
         Dock = DockStyle.Fill;
@@ -166,6 +167,15 @@ internal sealed class StudioLibrary : ListBox
         e.Graphics.DrawLines(icon, [new PointF(x, y), new PointF(x + 9 * scale, y), new PointF(x + 14 * scale, y + 5 * scale), new PointF(x + 14 * scale, y + 21 * scale), new PointF(x, y + 21 * scale), new PointF(x, y)]);
         e.Graphics.DrawLines(icon, [new PointF(x + 9 * scale, y), new PointF(x + 9 * scale, y + 5 * scale), new PointF(x + 14 * scale, y + 5 * scale)]);
         var textBounds = new Rectangle(e.Bounds.Left + (int)(46 * scale), e.Bounds.Top, e.Bounds.Width - (int)(54 * scale), e.Bounds.Height);
+        string? shortcut = ShortcutText?.Invoke(Items[e.Index]);
+        if (!string.IsNullOrEmpty(shortcut))
+        {
+            int width = Math.Min(textBounds.Width / 2, TextRenderer.MeasureText(e.Graphics, shortcut, Font).Width + (int)(12 * scale));
+            var shortcutBounds = new Rectangle(textBounds.Right - width, textBounds.Top, width, textBounds.Height);
+            TextRenderer.DrawText(e.Graphics, shortcut, Font, shortcutBounds, StudioTheme.Muted,
+                TextFormatFlags.Right | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
+            textBounds.Width -= width;
+        }
         TextRenderer.DrawText(e.Graphics, Items[e.Index].ToString(), Font, textBounds, ForeColor, TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
         e.DrawFocusRectangle();
     }
