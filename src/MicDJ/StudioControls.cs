@@ -132,8 +132,8 @@ internal sealed class StudioCombo : ComboBox
 internal sealed class StudioLibrary : ListBox
 {
     internal Func<object, string?>? ShortcutText;
-    internal object? PlayingItem;
-    internal int AnimationFrame;
+    private object? playingItem;
+    private int animationFrame;
     public StudioLibrary()
     {
         Dock = DockStyle.Fill;
@@ -145,6 +145,28 @@ internal sealed class StudioLibrary : ListBox
         ItemHeight = 52;
         AccessibleName = "Sound library";
     }
+
+    internal void UpdatePlayback(object? item)
+    {
+        object? previous = playingItem;
+        playingItem = item;
+        animationFrame = (animationFrame + 1) % 12;
+        if (!Equals(previous, item)) InvalidateIcon(previous);
+        InvalidateIcon(item);
+    }
+
+    private void InvalidateIcon(object? item)
+    {
+        if (item == null || !IsHandleCreated) return;
+        int index = Items.IndexOf(item);
+        if (index < 0) return;
+        Rectangle row = GetItemRectangle(index);
+        float scale = DeviceDpi / 96f;
+        var icon = new Rectangle(row.Left + (int)(17 * scale), row.Top + (int)(13 * scale),
+            (int)Math.Ceiling(21 * scale), (int)Math.Ceiling(26 * scale));
+        icon.Intersect(ClientRectangle);
+        if (!icon.IsEmpty) Invalidate(icon);
+    }
     protected override void OnDpiChangedAfterParent(EventArgs e)
     {
         base.OnDpiChangedAfterParent(e);
@@ -153,6 +175,14 @@ internal sealed class StudioLibrary : ListBox
     protected override void OnDrawItem(DrawItemEventArgs e)
     {
         if (e.Index < 0) return;
+        // Native ListBox painting does not use Control.OptimizedDoubleBuffer.
+        using var buffer = BufferedGraphicsManager.Current.Allocate(e.Graphics, e.Bounds);
+        DrawSound(new DrawItemEventArgs(buffer.Graphics, e.Font, e.Bounds, e.Index, e.State, e.ForeColor, e.BackColor));
+        buffer.Render(e.Graphics);
+    }
+
+    private void DrawSound(DrawItemEventArgs e)
+    {
         float scale = DeviceDpi / 96f;
         bool selected = (e.State & DrawItemState.Selected) != 0;
         using var fill = new SolidBrush(selected ? StudioTheme.Selection : BackColor);
@@ -166,19 +196,19 @@ internal sealed class StudioLibrary : ListBox
         e.Graphics.DrawLine(line, e.Bounds.Left, e.Bounds.Bottom - 1, e.Bounds.Right, e.Bounds.Bottom - 1);
         int x = e.Bounds.Left + (int)(19 * scale), y = e.Bounds.Top + (int)(15 * scale);
         using var icon = new Pen(StudioTheme.Text, scale);
-        if (Equals(Items[e.Index], PlayingItem))
+        if (Equals(Items[e.Index], playingItem))
         {
             using var bar = new SolidBrush(StudioTheme.Red);
             for (int column = 0; column < 3; column++)
             {
-                float height = (5 + 16 * Math.Abs(MathF.Sin((AnimationFrame + column * 3) * MathF.PI / 6))) * scale;
+                float height = (5 + 16 * Math.Abs(MathF.Sin((animationFrame + column * 3) * MathF.PI / 6))) * scale;
                 e.Graphics.FillRectangle(bar, x + column * 6 * scale, y + 21 * scale - height, 4 * scale, height);
             }
         }
         else
         {
-        e.Graphics.DrawLines(icon, [new PointF(x, y), new PointF(x + 9 * scale, y), new PointF(x + 14 * scale, y + 5 * scale), new PointF(x + 14 * scale, y + 21 * scale), new PointF(x, y + 21 * scale), new PointF(x, y)]);
-        e.Graphics.DrawLines(icon, [new PointF(x + 9 * scale, y), new PointF(x + 9 * scale, y + 5 * scale), new PointF(x + 14 * scale, y + 5 * scale)]);
+            e.Graphics.DrawLines(icon, [new PointF(x, y), new PointF(x + 9 * scale, y), new PointF(x + 14 * scale, y + 5 * scale), new PointF(x + 14 * scale, y + 21 * scale), new PointF(x, y + 21 * scale), new PointF(x, y)]);
+            e.Graphics.DrawLines(icon, [new PointF(x + 9 * scale, y), new PointF(x + 9 * scale, y + 5 * scale), new PointF(x + 14 * scale, y + 5 * scale)]);
         }
         var textBounds = new Rectangle(e.Bounds.Left + (int)(46 * scale), e.Bounds.Top, e.Bounds.Width - (int)(54 * scale), e.Bounds.Height);
         string? shortcut = ShortcutText?.Invoke(Items[e.Index]);

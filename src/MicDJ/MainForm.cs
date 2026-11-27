@@ -252,9 +252,7 @@ internal sealed partial class MainForm : Form
             playingSound = null;
             playbackTimer.Stop();
         }
-        sounds.PlayingItem = playingSound;
-        sounds.AnimationFrame = (sounds.AnimationFrame + 1) % 12;
-        sounds.Invalidate();
+        sounds.UpdatePlayback(playingSound);
         UpdatePlayButton();
     }
 
