@@ -16,6 +16,17 @@ string directory = Path.Combine(Path.GetTempPath(), "MicDJ-checks-" + Guid.NewGu
 Directory.CreateDirectory(directory);
 try
 {
+    Check("Device choices survive a new session including monitor-only output", () =>
+    {
+        string path = Path.Combine(directory, "devices.json");
+        Assert(DeviceSelections.Load(path).Microphone == null, "Missing settings must use defaults");
+        new DeviceSelections { Microphone = "mic-id", Destination = "", VirtualInput = "cable-id", Headphones = "phones-id" }.Save(path);
+        var loaded = DeviceSelections.Load(path);
+        Assert(loaded.Microphone == "mic-id" && loaded.Destination == "" && loaded.VirtualInput == "cable-id" && loaded.Headphones == "phones-id", "Device selections lost");
+        loaded.Destination = "output-id";
+        loaded.Save(path);
+        Assert(DeviceSelections.Load(path).Destination == "output-id", "New choice not persisted");
+    });
     string journal = Path.Combine(directory, "session.json");
     var devices = new FakeInputs();
     var session = new DefaultInputSession(devices, journal);

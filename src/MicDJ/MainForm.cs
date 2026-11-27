@@ -22,6 +22,8 @@ internal sealed partial class MainForm : Form
     private readonly DefaultInputSession defaults;
     private AudioEngine? engine;
     private bool closing;
+    private DeviceSelections deviceSelections = new();
+    private string DeviceSelectionsPath => Path.Combine(dataDirectory, "devices.json");
     private KeyMappings keyMappings = new();
     private string KeyMappingsPath => Path.Combine(dataDirectory, "key-mappings.json");
 
@@ -48,9 +50,22 @@ internal sealed partial class MainForm : Form
         micToggle.CheckedChanged += (_, _) => { if (engine != null) engine.MicrophoneEnabled = micToggle.Checked; };
         monitorToggle.CheckedChanged += (_, _) => { if (engine != null) engine.MonitorEnabled = monitorToggle.Checked; };
         destination.SelectedIndexChanged += (_, _) => UpdateMode();
+        void Remember(ComboBox combo, Action<string> assign)
+        {
+            combo.SelectionChangeCommitted += (_, _) => Guard(() =>
+            {
+                assign(SelectedId(combo));
+                deviceSelections.Save(DeviceSelectionsPath);
+            });
+        }
+        Remember(microphone, id => deviceSelections.Microphone = id);
+        Remember(destination, id => deviceSelections.Destination = id);
+        Remember(virtualInput, id => deviceSelections.VirtualInput = id);
+        Remember(headphones, id => deviceSelections.Headphones = id);
         Shown += (_, _) =>
         {
             Guard(() => defaults.Restore());
+            Guard(() => deviceSelections = DeviceSelections.Load(DeviceSelectionsPath));
             Guard(RefreshDevices);
             Guard(LoadLibrary);
             Guard(LoadKeyMappings);
@@ -70,22 +85,23 @@ internal sealed partial class MainForm : Form
     {
         var inputs = AudioEngine.ListDevices(DataFlow.Capture);
         var outputs = AudioEngine.ListDevices(DataFlow.Render);
-        static void Fill(ComboBox combo, IEnumerable<DeviceChoice> items, string? preferred)
+        static void Fill(ComboBox combo, IEnumerable<DeviceChoice> items, string? saved, string? preferred)
         {
             string? old = (combo.SelectedItem as DeviceChoice)?.Id;
             combo.Items.Clear();
             combo.Items.AddRange(items.Cast<object>().ToArray());
-            var selected = combo.Items.Cast<DeviceChoice>().FirstOrDefault(x => x.Id == old)
+            var selected = combo.Items.Cast<DeviceChoice>().FirstOrDefault(x => x.Id == saved)
+                ?? combo.Items.Cast<DeviceChoice>().FirstOrDefault(x => x.Id == old)
                 ?? combo.Items.Cast<DeviceChoice>().FirstOrDefault(x => x.Id == preferred);
             combo.SelectedItem = selected;
             if (combo.SelectedIndex < 0 && combo.Items.Count > 0) combo.SelectedIndex = 0;
         }
-        Fill(microphone, inputs, AudioEngine.DefaultDevice(DataFlow.Capture));
-        Fill(headphones, outputs, AudioEngine.DefaultDevice(DataFlow.Render));
+        Fill(microphone, inputs, deviceSelections.Microphone, AudioEngine.DefaultDevice(DataFlow.Capture));
+        Fill(headphones, outputs, deviceSelections.Headphones, AudioEngine.DefaultDevice(DataFlow.Render));
         var cableOut = outputs.FirstOrDefault(x => x.Name.Contains("CABLE Input", StringComparison.OrdinalIgnoreCase));
         var cableIn = inputs.FirstOrDefault(x => x.Name.Contains("CABLE Output", StringComparison.OrdinalIgnoreCase));
-        Fill(destination, new[] { new DeviceChoice("", "Monitor only — no virtual microphone") }.Concat(outputs), cableOut?.Id ?? "");
-        Fill(virtualInput, inputs, cableIn?.Id);
+        Fill(destination, new[] { new DeviceChoice("", "Monitor only — no virtual microphone") }.Concat(outputs), deviceSelections.Destination, cableOut?.Id ?? "");
+        Fill(virtualInput, inputs, deviceSelections.VirtualInput, cableIn?.Id);
         UpdateMode();
     }
     private bool PreviewOnly => (destination.SelectedItem as DeviceChoice)?.Id is null or "";
