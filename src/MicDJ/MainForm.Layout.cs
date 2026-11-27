@@ -10,7 +10,15 @@ internal sealed partial class MainForm
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 88));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 94));
-        root.Controls.Add(new BrandHeader { Dock = DockStyle.Fill, Margin = Padding.Empty }, 0, 0);
+        var header = new TableLayoutPanel { Dock = DockStyle.Fill, Margin = Padding.Empty, ColumnCount = 2, RowCount = 1, BackColor = Color.Black };
+        header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        header.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 200));
+        header.Controls.Add(new BrandHeader { Dock = DockStyle.Fill, Margin = Padding.Empty }, 0, 0);
+        var mappingButton = new StudioButton { Text = "Key mappings", KeyboardIcon = true, Dock = DockStyle.Fill, Margin = new Padding(0, 24, 20, 24), AccessibleName = "Open key mappings" };
+        mappingButton.Click += (_, _) => Guard(OpenKeyMappings);
+        header.Controls.Add(mappingButton, 1, 0);
+        header.Paint += (_, e) => { using var border = new Pen(StudioTheme.Border); e.Graphics.DrawLine(border, 0, header.Height - 1, header.Width, header.Height - 1); };
+        root.Controls.Add(header, 0, 0);
         var body = new TableLayoutPanel { Dock = DockStyle.Fill, Margin = Padding.Empty, ColumnCount = 2, RowCount = 1 };
         body.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 35));
         body.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 65));

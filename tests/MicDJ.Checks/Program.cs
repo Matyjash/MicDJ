@@ -84,6 +84,50 @@ try
         mix.Read(buffer, 0, 2);
         Assert(Math.Abs(buffer[0] - .175f) < .0001f, "Replay did not replace sound");
     });
+    Check("Key mappings reject collisions without losing existing assignments", () =>
+    {
+        var mappings = new KeyMappings();
+        mappings.Assign("sound:one.wav", Keys.F1);
+        mappings.Assign("sound:two.wav", Keys.Control | Keys.D2);
+        try { mappings.Assign("sound:two.wav", Keys.F1); throw new Exception("Expected collision"); }
+        catch (InvalidOperationException) { }
+        Assert(mappings.FindSound(Keys.F1) == "sound:one.wav", "Collision replaced original sound");
+        Assert(mappings.FindSound(Keys.Control | Keys.D2) == "sound:two.wav", "Collision removed old binding");
+        mappings.Assign("SOUND:ONE.WAV", Keys.F3);
+        Assert(mappings.FindSound(Keys.F1) == null && mappings.Bindings.Count == 2, "Reassignment left stale binding");
+    });
+    Check("Mapping drafts isolate cancel and save changes atomically", () =>
+    {
+        string path = Path.Combine(directory, "keys.json");
+        var original = new KeyMappings();
+        original.Assign("builtin:welcome", Keys.F1);
+        original.Save(path);
+        var draft = original.Clone();
+        draft.Remove("builtin:welcome");
+        draft.Assign("sound:intro.wav", Keys.Control | Keys.Shift | Keys.D1);
+        Assert(original.FindSound(Keys.F1) == "builtin:welcome", "Draft changed active mapping");
+        Assert(KeyMappings.Load(path).FindSound(Keys.F1) == "builtin:welcome", "Unsaved changes leaked to disk");
+        draft.Save(path);
+        var loaded = KeyMappings.Load(path);
+        Assert(loaded.Bindings.Count == 1 && loaded.FindSound(Keys.Control | Keys.Shift | Keys.D1) == "sound:intro.wav", "Saved mapping did not round-trip");
+        Assert(!Directory.EnumerateFiles(directory, "*.tmp").Any(), "Temporary save file leaked");
+    });
+    Check("Shortcuts preserve navigation keys and format combinations clearly", () =>
+    {
+        Assert(!KeyMappings.IsValid(Keys.Tab) && !KeyMappings.IsValid(Keys.Escape) && !KeyMappings.IsValid(Keys.Alt | Keys.F4), "Reserved keys accepted");
+        Assert(!KeyMappings.IsValid(Keys.A) && !KeyMappings.IsValid(Keys.ControlKey), "Incomplete shortcut accepted");
+        Assert(KeyMappings.IsValid(Keys.F2) && KeyMappings.IsValid(Keys.Control | Keys.D2), "Valid shortcut rejected");
+        Assert(KeyMappings.Format(Keys.Control | Keys.Shift | Keys.D2) == "Ctrl + Shift + 2", "Wrong shortcut display");
+    });
+    Check("Invalid saved mappings fail without overwriting the file", () =>
+    {
+        string path = Path.Combine(directory, "invalid-keys.json");
+        string content = "{\"one\":112,\"two\":112}";
+        File.WriteAllText(path, content);
+        try { KeyMappings.Load(path); throw new Exception("Expected collision in stored mappings"); }
+        catch (InvalidOperationException) { }
+        Assert(File.ReadAllText(path) == content, "Invalid mappings were overwritten");
+    });
     Console.WriteLine($"{passed} checks passed.");
 }
 finally

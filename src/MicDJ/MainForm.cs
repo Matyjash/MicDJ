@@ -22,6 +22,8 @@ internal sealed partial class MainForm : Form
     private readonly DefaultInputSession defaults;
     private AudioEngine? engine;
     private bool closing;
+    private KeyMappings keyMappings = new();
+    private string KeyMappingsPath => Path.Combine(dataDirectory, "key-mappings.json");
 
     public MainForm()
     {
@@ -51,6 +53,7 @@ internal sealed partial class MainForm : Form
             Guard(() => defaults.Restore());
             Guard(RefreshDevices);
             Guard(LoadLibrary);
+            Guard(LoadKeyMappings);
             UpdateState();
         };
         FormClosing += (_, e) =>
@@ -145,6 +148,7 @@ internal sealed partial class MainForm : Form
     private string LibraryDirectory => Path.Combine(dataDirectory, "Sounds");
     private sealed record SoundItem(string Path, bool BuiltIn = false)
     {
+        public string Id => BuiltIn ? "builtin:welcome" : "sound:" + System.IO.Path.GetFileName(Path);
         public override string ToString() => BuiltIn ? "Welcome · sample sound" : System.IO.Path.GetFileNameWithoutExtension(Path);
     }
     private void LoadLibrary()
@@ -177,12 +181,46 @@ internal sealed partial class MainForm : Form
         if (item.BuiltIn) throw new InvalidOperationException("The sample sound is a permanent part of the library.");
         File.Delete(item.Path);
         sounds.Items.Remove(item);
+        keyMappings.Remove(item.Id);
+        keyMappings.Save(KeyMappingsPath);
     }
     private void PlaySound()
     {
         if (engine == null || sounds.SelectedItem is not SoundItem sound) return;
         engine.Play(AudioEngine.LoadSound(sound.Path));
     }
+
+    private void LoadKeyMappings()
+    {
+        var loaded = KeyMappings.Load(KeyMappingsPath);
+        var available = sounds.Items.Cast<SoundItem>().Select(item => item.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        foreach (string id in loaded.Bindings.Keys.Where(id => !available.Contains(id)).ToArray()) loaded.Remove(id);
+        keyMappings = loaded;
+    }
+
+    private void OpenKeyMappings()
+    {
+        using var dialog = new KeyMappingsForm(sounds.Items.Cast<SoundItem>().Select(item => new SoundChoice(item.Id, item.ToString())).ToArray(), keyMappings, KeyMappingsPath);
+        if (dialog.ShowDialog(this) == DialogResult.OK) LoadKeyMappings();
+    }
+
+    protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
+    {
+        if (engine != null && Enabled && !ContainsOpenDropdown())
+        {
+            string? id = keyMappings.FindSound(keyData);
+            var sound = sounds.Items.Cast<SoundItem>().FirstOrDefault(item => StringComparer.OrdinalIgnoreCase.Equals(item.Id, id));
+            if (sound != null)
+            {
+                // Ignore auto-repeat so holding a shortcut does not restart the clip continuously.
+                if ((msg.LParam.ToInt64() & (1L << 30)) == 0) Guard(() => engine.Play(AudioEngine.LoadSound(sound.Path)));
+                return true;
+            }
+        }
+        return base.ProcessCmdKey(ref msg, keyData);
+    }
+
+    private bool ContainsOpenDropdown() => microphone.DroppedDown || destination.DroppedDown || virtualInput.DroppedDown || headphones.DroppedDown;
     private void Guard(Action action)
     {
         try { action(); } catch (Exception ex) { ShowError(ex.Message); }

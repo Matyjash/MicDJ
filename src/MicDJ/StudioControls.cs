@@ -18,6 +18,8 @@ internal sealed class StudioButton : Button
 {
     [System.ComponentModel.DefaultValue(false)]
     public bool Accent { get; init; }
+    [System.ComponentModel.DefaultValue(false)]
+    public bool KeyboardIcon { get; init; }
     private bool hovered;
     public StudioButton()
     {
@@ -35,7 +37,22 @@ internal sealed class StudioButton : Button
         e.Graphics.Clear(fill);
         using var border = new Pen(Focused ? StudioTheme.Text : Accent && Enabled ? StudioTheme.Red : StudioTheme.Border);
         e.Graphics.DrawRectangle(border, 0, 0, Width - 1, Height - 1);
-        TextRenderer.DrawText(e.Graphics, Text, Font, ClientRectangle, Enabled ? StudioTheme.Text : StudioTheme.Muted, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+        var textBounds = ClientRectangle;
+        if (KeyboardIcon)
+        {
+            float scale = DeviceDpi / 96f;
+            float x = 12 * scale, y = (Height - 18 * scale) / 2;
+            using var pen = new Pen(StudioTheme.Text, scale);
+            using var key = new SolidBrush(StudioTheme.Text);
+            e.Graphics.DrawRectangle(pen, x, y, 28 * scale, 18 * scale);
+            for (int row = 0; row < 2; row++)
+                for (int column = 0; column < 5; column++)
+                    e.Graphics.FillRectangle(key, x + (4 + column * 4) * scale, y + (4 + row * 4) * scale, 2 * scale, 2 * scale);
+            e.Graphics.FillRectangle(key, x + 7 * scale, y + 13 * scale, 14 * scale, 2 * scale);
+            textBounds.X += (int)(46 * scale);
+            textBounds.Width -= (int)(46 * scale);
+        }
+        TextRenderer.DrawText(e.Graphics, Text, Font, textBounds, Enabled ? StudioTheme.Text : StudioTheme.Muted, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
         if (Focused && ShowFocusCues) ControlPaint.DrawFocusRectangle(e.Graphics, Rectangle.Inflate(ClientRectangle, -4, -4));
     }
 }
