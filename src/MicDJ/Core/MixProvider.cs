@@ -15,6 +15,7 @@ public sealed class MixProvider : ISampleProvider
     private float gain;
     private volatile bool microphoneEnabled = true;
     public bool MicrophoneEnabled { get => microphoneEnabled; set => microphoneEnabled = value; }
+    public bool IsPlaying { get { lock (sync) return position < clip.Length; } }
     public WaveFormat WaveFormat { get; } = WaveFormat.CreateIeeeFloatWaveFormat(48000, 2);
 
     public MixProvider(ISampleProvider microphone) => this.microphone = microphone;

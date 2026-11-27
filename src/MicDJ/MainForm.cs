@@ -22,6 +22,8 @@ internal sealed partial class MainForm : Form
     private readonly DefaultInputSession defaults;
     private AudioEngine? engine;
     private bool closing;
+    private readonly System.Windows.Forms.Timer playbackTimer = new() { Interval = 80 };
+    private SoundItem? playingSound;
     private DeviceSelections deviceSelections = new();
     private string DeviceSelectionsPath => Path.Combine(dataDirectory, "devices.json");
     private KeyMappings keyMappings = new();
@@ -42,6 +44,8 @@ internal sealed partial class MainForm : Form
         var (add, remove) = BuildStudioLayout();
         sounds.ShortcutText = item => item is SoundItem sound && keyMappings.Bindings.TryGetValue(sound.Id, out var shortcut)
             ? KeyMappings.Format(shortcut) : null;
+        playbackTimer.Tick += (_, _) => UpdatePlayback();
+        FormClosed += (_, _) => playbackTimer.Dispose();
         start.Click += (_, _) => StartMix();
         stop.Click += (_, _) => StopMix();
         refresh.Click += (_, _) => Guard(RefreshDevices);
@@ -157,6 +161,7 @@ internal sealed partial class MainForm : Form
         try { defaults.Restore(); } catch (Exception ex) { errors.Add(ex.Message); }
         try { engine?.Dispose(); } catch (Exception ex) { errors.Add(ex.Message); }
         engine = null;
+        UpdatePlayback();
         status.Text = errors.Count == 0 ? "Stopped · previous input preserved" : "Click Stop again to retry";
         UpdateState();
         if (errors.Count > 0) ShowError(string.Join(Environment.NewLine, errors));
@@ -205,7 +210,28 @@ internal sealed partial class MainForm : Form
     private void PlaySound()
     {
         if (engine == null || sounds.SelectedItem is not SoundItem sound) return;
+        PlaySound(sound);
+    }
+
+    private void PlaySound(SoundItem sound)
+    {
+        if (engine == null) return;
         engine.Play(AudioEngine.LoadSound(sound.Path));
+        playingSound = sound;
+        playbackTimer.Start();
+        UpdatePlayback();
+    }
+
+    private void UpdatePlayback()
+    {
+        if (engine?.IsPlaying != true)
+        {
+            playingSound = null;
+            playbackTimer.Stop();
+        }
+        sounds.PlayingItem = playingSound;
+        sounds.AnimationFrame = (sounds.AnimationFrame + 1) % 12;
+        sounds.Invalidate();
     }
 
     private void LoadKeyMappings()
@@ -232,7 +258,7 @@ internal sealed partial class MainForm : Form
             if (sound != null)
             {
                 // Ignore auto-repeat so holding a shortcut does not restart the clip continuously.
-                if ((msg.LParam.ToInt64() & (1L << 30)) == 0) Guard(() => engine.Play(AudioEngine.LoadSound(sound.Path)));
+                if ((msg.LParam.ToInt64() & (1L << 30)) == 0) Guard(() => PlaySound(sound));
                 return true;
             }
         }

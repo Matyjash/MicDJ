@@ -132,6 +132,8 @@ internal sealed class StudioCombo : ComboBox
 internal sealed class StudioLibrary : ListBox
 {
     internal Func<object, string?>? ShortcutText;
+    internal object? PlayingItem;
+    internal int AnimationFrame;
     public StudioLibrary()
     {
         Dock = DockStyle.Fill;
@@ -164,8 +166,20 @@ internal sealed class StudioLibrary : ListBox
         e.Graphics.DrawLine(line, e.Bounds.Left, e.Bounds.Bottom - 1, e.Bounds.Right, e.Bounds.Bottom - 1);
         int x = e.Bounds.Left + (int)(19 * scale), y = e.Bounds.Top + (int)(15 * scale);
         using var icon = new Pen(StudioTheme.Text, scale);
+        if (Equals(Items[e.Index], PlayingItem))
+        {
+            using var bar = new SolidBrush(StudioTheme.Red);
+            for (int column = 0; column < 3; column++)
+            {
+                float height = (5 + 16 * Math.Abs(MathF.Sin((AnimationFrame + column * 3) * MathF.PI / 6))) * scale;
+                e.Graphics.FillRectangle(bar, x + column * 6 * scale, y + 21 * scale - height, 4 * scale, height);
+            }
+        }
+        else
+        {
         e.Graphics.DrawLines(icon, [new PointF(x, y), new PointF(x + 9 * scale, y), new PointF(x + 14 * scale, y + 5 * scale), new PointF(x + 14 * scale, y + 21 * scale), new PointF(x, y + 21 * scale), new PointF(x, y)]);
         e.Graphics.DrawLines(icon, [new PointF(x + 9 * scale, y), new PointF(x + 9 * scale, y + 5 * scale), new PointF(x + 14 * scale, y + 5 * scale)]);
+        }
         var textBounds = new Rectangle(e.Bounds.Left + (int)(46 * scale), e.Bounds.Top, e.Bounds.Width - (int)(54 * scale), e.Bounds.Height);
         string? shortcut = ShortcutText?.Invoke(Items[e.Index]);
         if (!string.IsNullOrEmpty(shortcut))

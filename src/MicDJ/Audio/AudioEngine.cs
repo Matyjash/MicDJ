@@ -120,6 +120,7 @@ internal sealed class AudioEngine : IDisposable
     }
 
     public void Play(float[] samples) => mixer?.Play(samples);
+    public bool IsPlaying => mixer?.IsPlaying == true;
 
     public void Dispose()
     {

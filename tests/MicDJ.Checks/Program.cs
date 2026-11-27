@@ -66,9 +66,12 @@ try
     Check("Mic mute leaves WAV intact and respects buffer offset", () =>
     {
         var mix = new MixProvider(new Tone(.4f)) { MicrophoneEnabled = false };
+        Assert(!mix.IsPlaying, "New mixer reports playback");
         mix.Play([.5f, -.5f, .25f, -.25f]);
+        Assert(mix.IsPlaying, "Playing clip not reported");
         float[] buffer = Enumerable.Repeat(99f, 8).ToArray();
         mix.Read(buffer, 2, 4);
+        Assert(!mix.IsPlaying, "Completed clip still reports playback");
         Assert(buffer[0] == 99 && buffer[6] == 99, "Buffer boundary overwritten");
         Assert(Math.Abs(buffer[2] - .35f) < .0001f && Math.Abs(buffer[3] + .35f) < .0001f, "Sound muted or changed");
         mix.Read(buffer, 0, 8);
