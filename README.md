@@ -14,8 +14,11 @@ click the shortcut field, press a function key or a Ctrl/Alt combination, then c
 **Assign**. The scrollable list supports editing and clearing assignments.
 **Save mappings** applies and remembers changes; **Cancel** discards them.
 
-Shortcuts play sounds while the mixer is running and the main MicDJ window is focused.
-They are inactive while editing mappings or using another application.
+Shortcuts play sounds globally while the mixer is running, including when MicDJ is
+minimized or another application is focused. Holding a shortcut does not repeat it.
+They are released when the mixer stops or while editing mappings.
+If Windows or another application has reserved a shortcut, MicDJ reports the conflict;
+choose another combination. F12 is reserved by Windows and cannot be activated.
 
 ## Build
 

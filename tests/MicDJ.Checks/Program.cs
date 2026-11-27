@@ -1,4 +1,6 @@
 using MicDJ.Core;
+using MicDJ;
+using System.Runtime.InteropServices;
 
 int passed = 0;
 void Check(string name, Action test)
@@ -15,6 +17,33 @@ string directory = Path.Combine(Path.GetTempPath(), "MicDJ-checks-" + Guid.NewGu
 Directory.CreateDirectory(directory);
 try
 {
+    Check("Windows hotkeys detect conflicts, dispatch messages and release registrations", () =>
+    {
+        var mappings = new KeyMappings();
+        mappings.Assign("sound:global.wav", Keys.Control | Keys.Alt | Keys.Shift | Keys.F24);
+        using var first = new GlobalHotKeys();
+        using var second = new GlobalHotKeys();
+        Assert(first.Register(mappings).Count == 0, "Could not register integration-test shortcut");
+        Assert(second.Register(mappings).Count == 1, "Windows shortcut conflict was not reported");
+        string? received = null;
+        first.Pressed += id => received = id;
+        Assert(NativeMessages.PostMessage(first.Handle, 0x0312, new IntPtr(1), IntPtr.Zero), "Could not queue Windows hotkey message");
+        Application.DoEvents();
+        Assert(received == "sound:global.wav", "Windows message did not dispatch the sound");
+        first.Clear();
+        received = null;
+        Assert(NativeMessages.PostMessage(first.Handle, 0x0312, new IntPtr(1), IntPtr.Zero), "Could not queue stale message");
+        Application.DoEvents();
+        Assert(received == null, "Released shortcut dispatched a stale message");
+        Assert(second.Register(mappings).Count == 0, "Cleared shortcut remained reserved");
+        second.Dispose();
+        Assert(first.Register(mappings).Count == 0, "Disposed window did not release its shortcut");
+        var replacement = new KeyMappings();
+        replacement.Assign("sound:replacement.wav", Keys.Control | Keys.Alt | Keys.Shift | Keys.F23);
+        Assert(first.Register(replacement).Count == 0, "Could not update registration");
+        using var third = new GlobalHotKeys();
+        Assert(third.Register(mappings).Count == 0, "Updating mappings did not release old combination");
+    });
     Check("Device choices survive a new session including monitor-only output", () =>
     {
         string path = Path.Combine(directory, "devices.json");
@@ -105,4 +134,11 @@ sealed class FakeInputs : IDefaultInputs
         if (FailOnRole == role) { FailOnRole = -1; throw new InvalidOperationException("Simulated missing endpoint"); }
         Current[role] = id;
     }
+}
+
+static class NativeMessages
+{
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool PostMessage(IntPtr window, uint message, IntPtr wParam, IntPtr lParam);
 }

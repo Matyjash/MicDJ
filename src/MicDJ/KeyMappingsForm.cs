@@ -238,7 +238,8 @@ internal sealed class KeyMappingsForm : Form
         assign.Enabled = false;
         feedback.ForeColor = StudioTheme.Muted;
         if (sound.SelectedItem is not SoundChoice selected) { feedback.Text = "No matching sounds. Add WAV files from the main window."; return; }
-        if (capture.Shortcut is not Keys shortcut) { feedback.Text = "Use F1–F24, or Ctrl/Alt with a letter or number. Esc cancels capture."; return; }
+        if (capture.Shortcut is not Keys shortcut) { feedback.Text = "Use F1–F24 (except F12), or Ctrl/Alt with a letter or number."; return; }
+        if ((shortcut & Keys.KeyCode) == Keys.F12) { feedback.Text = "F12 is reserved by Windows. Choose another shortcut."; feedback.ForeColor = StudioTheme.Red; return; }
         if (!KeyMappings.IsValid(shortcut)) { feedback.Text = "Choose a function key, or Ctrl/Alt with a letter or number."; feedback.ForeColor = StudioTheme.Red; return; }
         string? conflict = draft.FindSound(shortcut);
         if (conflict != null && !StringComparer.OrdinalIgnoreCase.Equals(conflict, selected.Id))

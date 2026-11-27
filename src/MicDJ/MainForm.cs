@@ -27,6 +27,7 @@ internal sealed partial class MainForm : Form
     private DeviceSelections deviceSelections = new();
     private string DeviceSelectionsPath => Path.Combine(dataDirectory, "devices.json");
     private KeyMappings keyMappings = new();
+    private readonly GlobalHotKeys hotKeys = new();
     private string KeyMappingsPath => Path.Combine(dataDirectory, "key-mappings.json");
 
     public MainForm()
@@ -46,6 +47,13 @@ internal sealed partial class MainForm : Form
             ? KeyMappings.Format(shortcut) : null;
         playbackTimer.Tick += (_, _) => UpdatePlayback();
         FormClosed += (_, _) => playbackTimer.Dispose();
+        Disposed += (_, _) => hotKeys.Dispose();
+        hotKeys.Pressed += id =>
+        {
+            if (engine == null || !Enabled || closing || ContainsOpenDropdown()) return;
+            var sound = sounds.Items.Cast<SoundItem>().FirstOrDefault(item => StringComparer.OrdinalIgnoreCase.Equals(item.Id, id));
+            if (sound != null) Guard(() => PlaySound(sound));
+        };
         start.Click += (_, _) => StartMix();
         stop.Click += (_, _) => StopMix();
         refresh.Click += (_, _) => Guard(RefreshDevices);
@@ -150,6 +158,7 @@ internal sealed partial class MainForm : Form
             engine.Start(mic, output, phones, micToggle.Checked, monitorToggle.Checked);
             if (input != null) defaults.Begin(input);
             status.Text = PreviewOnly ? "● Running · test mode" : "● Running · mix as Windows input";
+            RegisterHotKeys();
         }
         catch (Exception ex) { StopMix(); ShowError(ex.Message); }
         UpdateState();
@@ -157,6 +166,7 @@ internal sealed partial class MainForm : Form
 
     private bool StopMix()
     {
+        hotKeys.Clear();
         List<string> errors = [];
         // Restore first, even if subsequently disposing an unplugged endpoint fails.
         try { defaults.Restore(); } catch (Exception ex) { errors.Add(ex.Message); }
@@ -211,6 +221,7 @@ internal sealed partial class MainForm : Form
         }
         sounds.Items.Remove(item);
         keyMappings.Remove(item.Id);
+        RegisterHotKeys();
         keyMappings.Save(KeyMappingsPath);
     }
     private void PlaySound()
@@ -265,24 +276,21 @@ internal sealed partial class MainForm : Form
 
     private void OpenKeyMappings()
     {
-        using var dialog = new KeyMappingsForm(sounds.Items.Cast<SoundItem>().Select(item => new SoundChoice(item.Id, item.ToString())).ToArray(), keyMappings, KeyMappingsPath);
-        if (dialog.ShowDialog(this) == DialogResult.OK) LoadKeyMappings();
+        hotKeys.Clear();
+        try
+        {
+            using var dialog = new KeyMappingsForm(sounds.Items.Cast<SoundItem>().Select(item => new SoundChoice(item.Id, item.ToString())).ToArray(), keyMappings, KeyMappingsPath);
+            if (dialog.ShowDialog(this) == DialogResult.OK) Guard(LoadKeyMappings);
+        }
+        finally { RegisterHotKeys(); }
     }
 
-    protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
+    private void RegisterHotKeys()
     {
-        if (engine != null && Enabled && !ContainsOpenDropdown())
-        {
-            string? id = keyMappings.FindSound(keyData);
-            var sound = sounds.Items.Cast<SoundItem>().FirstOrDefault(item => StringComparer.OrdinalIgnoreCase.Equals(item.Id, id));
-            if (sound != null)
-            {
-                // Ignore auto-repeat so holding a shortcut does not restart the clip continuously.
-                if ((msg.LParam.ToInt64() & (1L << 30)) == 0) Guard(() => PlaySound(sound));
-                return true;
-            }
-        }
-        return base.ProcessCmdKey(ref msg, keyData);
+        if (engine == null) return;
+        var failures = hotKeys.Register(keyMappings);
+        if (failures.Count > 0)
+            ShowError("Some global shortcuts could not be activated. Choose different combinations in Key mappings.\n\n" + string.Join(Environment.NewLine, failures));
     }
 
     private bool ContainsOpenDropdown() => microphone.DroppedDown || destination.DroppedDown || virtualInput.DroppedDown || headphones.DroppedDown;
